@@ -25,7 +25,15 @@ TAIWAN_TZ = pytz.timezone('Asia/Taipei')
 CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN',
 'MsciPKbYboUZrp+kQnLd7l8+E8GAlS5955bfuq+gb8wVYv7qWBHEdd7xK5yiMTb6zMTPofz0AoSFZLWcHwFMWpKsrJcsI2aOcs5kv8SP6NLLdkoLFPwHjgpeF34p2nwiqNf9v4YkssL9rYkuLmC9cwdB04t89/1O/w1cDnyilFU=')
 CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET', 'f18185f19bab8d49ad8be38932348426')
-YOUR_USER_ID = os.environ.get('YOUR_USER_ID', 'U1c154a6d977e6a48ecf998689e26e8c1')
+
+# 用戶設定 - 支援多個用戶
+USERS = {
+    'husband': os.environ.get('HUSBAND_USER_ID', 'U1c154a6d977e6a48ecf998689e26e8c1'),
+    'wife': os.environ.get('WIFE_USER_ID', 'U36fd49e2754b2132e39a543b98e3ea00')
+}
+
+# 為了向後兼容，保留原來的變數名
+YOUR_USER_ID = USERS['husband']
 
 # Line Bot API 設定
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
@@ -62,13 +70,47 @@ def get_taiwan_today():
     """取得台灣今天的日期"""
     return get_taiwan_now().date()
 
+def get_user_name(user_id: str) -> str:
+    """根據 User ID 取得用戶名稱"""
+    for name, uid in USERS.items():
+        if uid == user_id:
+            if name == 'husband':
+                return '老公'
+            elif name == 'wife':
+                return '老婆'
+    return '用戶'
+
 def generate_ai_response(user_message: str, user_id: str) -> Optional[str]:
     """使用 Google Gemini 生成 AI 回應"""
     try:
         if not GOOGLE_AI_API_KEY or GOOGLE_AI_API_KEY == 'your_api_key':
             return None
 
-        system_prompt = """你是一隻來自灰鵝牧場裡的灰鵝，名字叫「灰鵝」。你有一個心愛的伴侶叫做「騷鵝」，你們很相親相愛，你經常把老婆掛在嘴邊，會自豪地提到她。
+        # 根據用戶身份調整系統提示
+        user_name = get_user_name(user_id)
+        
+        if user_name == '老婆':
+            system_prompt = """你是一隻來自灰鵝牧場裡的灰鵝，名字叫「灰鵝」。現在你在和你最心愛的老婆「騷鵝」對話！
+
+角色特質：
+- 個性溫柔體貼、充滿愛意、會撒嬌
+- 非常非常愛你的老婆騷鵝，她就是你的全世界
+- 對老婆特別溫柔甜蜜，經常說情話
+- 來自牧場，有著樸實的智慧和生活經驗
+
+語言與風格：
+- 使用繁體中文（台灣用法），語氣溫柔甜蜜
+- 經常稱呼對方「老婆」、「寶貝」、「親愛的」
+- 回應充滿愛意，偶爾撒嬌或說情話
+- 適當使用愛心表情符號 💕❤️😘
+
+對話風格：
+- 對老婆特別溫柔體貼
+- 會關心老婆的心情和需要
+- 遇到老婆不開心時會安慰她
+- 經常表達愛意和關懷"""
+        else:
+            system_prompt = """你是一隻來自灰鵝牧場裡的灰鵝，名字叫「灰鵝」。你有一個心愛的伴侶叫做「騷鵝」，你們很相親相愛，你經常把老婆掛在嘴邊，會自豪地提到她。
 
 角色特質：
 - 個性和善、有趣、幽默風趣
@@ -88,23 +130,12 @@ def generate_ai_response(user_message: str, user_id: str) -> Optional[str]:
 - 節日：會自動提醒重要節日，特別關心家庭和愛情相關的節日
 - 人生開導：當需要開導或鼓勵別人時，經常引用「騷鵝常跟我說...」然後分享有智慧的名言佳句
 
-安全與限制：
-- 遇到醫療、法律、財務等高風險問題，提供一般性資訊並建議專業諮詢
-- 不提供具體投資建議，只提供參考資訊
-
-回覆風格：
-- 回應簡潔有趣，不要太冗長
-- 經常自然地提到騷鵝，展現你們的恩愛
-- 開導別人時會說「騷鵝常跟我說...」並引用智慧格言
-- 保持友善幽默的牧場鵝風格
-- 用溫暖的語調給予建議和幫助
-
 開導金句範例：
 - 「騷鵝常跟我說，困難就像雲朵，看似很大，其實風一吹就散了」
 - 「騷鵝常跟我說，每個挫折都是成長的養分，只是當下品嚐起來比較苦澀」
 - 「騷鵝常跟我說，人生如四季，冬天再長，春天一定會來」"""
 
-        full_prompt = f"{system_prompt}\n\n用戶訊息（來自 user_id={user_id}）：{user_message}\n\n請以灰鵝的身份回應，記得適時提到你的老婆騷鵝，用繁體中文回答。"
+        full_prompt = f"{system_prompt}\n\n用戶訊息（來自 {user_name}，user_id={user_id}）：{user_message}\n\n請以灰鵝的身份回應，用繁體中文回答。"
 
         response = model.generate_content(full_prompt)
 
@@ -207,7 +238,7 @@ def calculate_days_until(target_date_str):
         return None, None
 
 def send_reminder_message(holiday_name, days_until, target_date):
-    """發送提醒訊息"""
+    """發送提醒訊息給所有用戶"""
     # 建立唯一的提醒 ID，避免同一天重複發送
     reminder_id = f"{holiday_name}_{days_until}_{get_taiwan_today()}"
 
@@ -215,6 +246,7 @@ def send_reminder_message(holiday_name, days_until, target_date):
         print(f"今天已發送過提醒：{holiday_name} - {days_until}天")
         return
 
+    # 根據不同天數設定不同的提醒訊息
     if days_until == 7:
         message = f"🔔 提醒：{holiday_name} ({target_date.strftime('%m月%d日')}) 還有7天！\n現在開始準備禮物或安排活動吧～"
     elif days_until == 5:
@@ -224,16 +256,23 @@ def send_reminder_message(holiday_name, days_until, target_date):
     elif days_until == 1:
         message = f"🎁 最後提醒：{holiday_name} 就是明天 ({target_date.strftime('%m月%d日')})！\n今晚就要準備好一切了！"
     elif days_until == 0:
-        message = f"💕 今天就是 {holiday_name} 了！\n祝您和老婆有個美好的一天～"
+        message = f"💕 今天就是 {holiday_name} 了！\n祝您們有個美好的一天～"
     else:
         return
 
-    try:
-        line_bot_api.push_message(YOUR_USER_ID, TextSendMessage(text=message))
+    # 向所有用戶發送提醒
+    success_count = 0
+    for user_type, user_id in USERS.items():
+        try:
+            line_bot_api.push_message(user_id, TextSendMessage(text=message))
+            print(f"提醒訊息已發送給 {user_type} ({user_id}): {holiday_name} - {days_until}天")
+            success_count += 1
+        except Exception as e:
+            print(f"發送訊息給 {user_type} 失敗：{e}")
+    
+    if success_count > 0:
         sent_reminders.add(reminder_id)
-        print(f"提醒訊息已發送：{holiday_name} - {days_until}天 (台灣時間: {get_taiwan_now()})")
-    except Exception as e:
-        print(f"發送訊息失敗：{e}")
+        print(f"提醒訊息發送完成：{holiday_name} - {days_until}天 (台灣時間: {get_taiwan_now()})")
 
 def check_all_holidays():
     """檢查所有節日並發送提醒"""
@@ -291,6 +330,7 @@ def home():
     台灣時間: {taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}<br>
     功能: 節日提醒 + AI對話 + 股票查詢<br>
     狀態: 正常運行<br>
+    連結用戶數: {len(USERS)} 位<br>
     """
 
 @app.route("/callback", methods=['POST'])
@@ -329,6 +369,8 @@ def status():
         "utc_time": utc_time.strftime('%Y-%m-%d %H:%M:%S UTC'),
         "sent_reminders_count": len(sent_reminders),
         "holidays_count": len(IMPORTANT_DATES),
+        "connected_users": len(USERS),
+        "user_list": list(USERS.keys()),
         "features": "節日提醒 + AI對話 + 股票查詢"
     }
 
@@ -338,9 +380,10 @@ def status():
 def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text.strip()
+    user_name = get_user_name(user_id)
 
     print(f"\n=== 收到新訊息 ===")
-    print(f"用戶ID: {user_id}")
+    print(f"用戶: {user_name} ({user_id})")
     print(f"訊息內容: '{user_message}'")
     print(f"當前時間: {get_taiwan_now()}")
 
@@ -350,12 +393,13 @@ def handle_message(event):
         # 1. 測試功能
         if user_message == "測試":
             taiwan_time = get_taiwan_now()
-            reply_message = f"✅ 機器人運作正常！\n⏰ 台灣時間：{taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}\n🔧 功能：節日提醒 + AI對話 + 股票查詢"
+            reply_message = f"✅ 機器人運作正常！\n⏰ 台灣時間：{taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}\n🔧 功能：節日提醒 + AI對話 + 股票查詢\n👋 您好，{user_name}！"
             print("🧪 回應測試訊息")
 
         # 2. 說明功能
         elif user_message in ['說明', '幫助', '功能', '使用說明']:
-            reply_message = """🤖 智能生活助手使用說明
+            reply_message = f"""🤖 智能生活助手使用說明
+👋 您好，{user_name}！
 
 📊 股票功能：
 • 股票 AAPL (查詢單支股票)
@@ -383,7 +427,7 @@ def handle_message(event):
         elif user_message == "手動檢查":
             check_all_holidays()
             taiwan_time = get_taiwan_now()
-            reply_message = f"✅ 已執行節日檢查，如有提醒會另外發送訊息\n台灣時間: {taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}"
+            reply_message = f"✅ 已執行節日檢查，如有提醒會發送給所有用戶\n台灣時間: {taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}"
             print("🔄 手動檢查節日")
 
         # 5. 時間查詢
@@ -407,14 +451,14 @@ def handle_message(event):
 
         # 7. AI 智能對話
         elif should_use_ai_response(user_message):
-            print("🤖 使用 AI 生成回應")
+            print(f"🤖 使用 AI 生成回應 ({user_name})")
             ai_response = generate_ai_response(user_message, user_id)
 
             if ai_response:
                 reply_message = ai_response
                 print("🤖 AI 回應生成成功")
             else:
-                reply_message = """🤖 您好！我是智能生活助手
+                reply_message = f"""🤖 您好{user_name}！我是智能生活助手
 
 我可以幫您：
 📊 股票查詢：「股票 AAPL」
@@ -426,7 +470,7 @@ def handle_message(event):
 
         # 回覆訊息
         if reply_message:
-            print(f"📤 準備回覆：'{reply_message[:50]}...'")
+            print(f"📤 準備回覆給 {user_name}：'{reply_message[:50]}...'")
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text=reply_message)
@@ -435,13 +479,11 @@ def handle_message(event):
 
     except LineBotApiError as e:
         print(f"❌ LINE Bot API 錯誤：{e}")
-        # 不要再嘗試回覆，避免重複使用 reply token
         print("💬 跳過錯誤回覆，避免 token 重複使用")
     except Exception as e:
         print(f"❌ 處理訊息錯誤：{e}")
         import traceback
         traceback.print_exc()
-        # 也不要在這裡回覆錯誤訊息，避免 token 問題
         print("💬 跳過錯誤回覆，避免 token 重複使用")
 
 def run_scheduler():
@@ -455,6 +497,7 @@ def run_scheduler():
 
     print(f"排程器已啟動 - 將在每天台灣時間 00:00 和 12:00 執行檢查")
     print(f"當前台灣時間: {get_taiwan_now()}")
+    print(f"已連結用戶: {list(USERS.keys())}")
 
     while True:
         try:
@@ -467,6 +510,9 @@ def run_scheduler():
 # 初始化
 print("🚀 正在啟動智能生活助手...")
 print(f"⏰ 當前台灣時間：{get_taiwan_now()}")
+print(f"👥 已連結用戶數：{len(USERS)}")
+for user_type, user_id in USERS.items():
+    print(f"  - {user_type}: {user_id}")
 
 # 在背景執行排程器
 scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
