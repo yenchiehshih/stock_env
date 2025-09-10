@@ -7,13 +7,13 @@ import schedule
 import time
 import threading
 import requests
+import random
 from threading import Lock
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from flask import Flask, request, abort
 import google.generativeai as genai
-import yfinance as yf
 from typing import Optional
 
 app = Flask(__name__)
@@ -34,6 +34,7 @@ USERS = {
 
 # 為了向後兼容，保留原來的變數名
 YOUR_USER_ID = USERS['husband']
+WIFE_USER_ID = USERS['wife']
 
 # Line Bot API 設定
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
@@ -62,6 +63,10 @@ IMPORTANT_DATES = {
 # 用來記錄已發送的提醒
 sent_reminders = set()
 
+# 新增：記錄最後對話時間
+last_conversation_time = {}
+care_messages_sent = set()  # 記錄已發送的關心訊息，避免重複發送
+
 def get_taiwan_now():
     """取得台灣當前時間"""
     return datetime.datetime.now(TAIWAN_TZ)
@@ -79,6 +84,76 @@ def get_user_name(user_id: str) -> str:
             elif name == 'wife':
                 return '老婆'
     return '用戶'
+
+def update_last_conversation_time(user_id: str):
+    """更新最後對話時間"""
+    current_time = get_taiwan_now()
+    last_conversation_time[user_id] = current_time
+    print(f"📝 更新 {get_user_name(user_id)} 的最後對話時間: {current_time}")
+
+def check_wife_inactive_and_send_care():
+    """檢查老婆是否超過24小時沒對話，如果是則直接發送關心訊息給老婆"""
+    current_time = get_taiwan_now()
+    
+    # 檢查老婆的最後對話時間
+    if WIFE_USER_ID not in last_conversation_time:
+        # 如果沒有記錄，表示從未對話過，不發送訊息
+        print("⚠️ 老婆從未對話過，不發送關心訊息")
+        return
+    
+    last_wife_time = last_conversation_time[WIFE_USER_ID]
+    time_diff = current_time - last_wife_time
+    
+    print(f"🔍 檢查老婆最後對話時間:")
+    print(f"  - 最後對話: {last_wife_time}")
+    print(f"  - 現在時間: {current_time}")
+    print(f"  - 時間差: {time_diff}")
+    
+    # 如果超過24小時（1440分鐘）
+    if time_diff.total_seconds() > 24 * 60 * 60:
+        # 建立唯一ID避免重複發送（以天為單位）
+        today_str = current_time.strftime('%Y-%m-%d')
+        care_message_id = f"wife_care_{today_str}"
+        
+        if care_message_id not in care_messages_sent:
+            # 直接發送關心訊息給老婆
+            hours_since = int(time_diff.total_seconds() // 3600)
+            care_message = generate_care_message_for_wife(hours_since)
+            
+            try:
+                line_bot_api.push_message(WIFE_USER_ID, TextSendMessage(text=care_message))
+                care_messages_sent.add(care_message_id)
+                print(f"💕 已發送關心訊息給騷鵝 - 她已 {hours_since} 小時沒對話")
+            except Exception as e:
+                print(f"❌ 發送關心訊息失敗：{e}")
+        else:
+            print(f"⚠️ 今天已發送過關心訊息")
+    else:
+        remaining_hours = 24 - (time_diff.total_seconds() / 3600)
+        print(f"✅ 老婆最近有對話，還有 {remaining_hours:.1f} 小時到達24小時")
+
+def generate_care_message_for_wife(hours_since: int) -> str:
+    """生成直接發送給老婆的關心訊息"""
+    messages = [
+        f"💕 騷鵝寶貝～我們已經 {hours_since} 小時沒聊天了呢！\n\n人家在牧場裡好想你呀～ 🥺\n最近過得如何呢？有什麼開心或煩惱的事都可以跟我分享哦！",
+        
+        f"🤗 親愛的騷鵝，我發現我們已經 {hours_since} 小時沒有對話了～\n\n不知道你最近在忙什麼呢？\n記得要好好照顧自己，有我這隻灰鵝永遠在這裡陪你！ ❤️",
+        
+        f"😊 騷鵝老婆～已經 {hours_since} 小時沒聽到你的聲音了！\n\n我在想你會不會在忙工作或其他事情？\n不管多忙，記得要休息一下，喝個水，深呼吸～我愛你！ 💕",
+        
+        f"🥺 寶貝騷鵝，我們已經 {hours_since} 小時沒聊天了...\n\n我在牧場池塘邊等你，想聽聽你今天過得怎麼樣～\n不管發生什麼事，記得你的灰鵝永遠愛你支持你！ 🦢❤️",
+        
+        f"💭 親愛的騷鵝～注意到我們已經 {hours_since} 小時沒有互動了！\n\n希望你一切都好～\n如果你需要有人聊天、抱怨、或只是想分享心情，我都在這裡！\n你永遠是我最珍貴的寶貝～ 🥰"
+    ]
+    
+    return random.choice(messages)
+
+def clear_old_care_records():
+    """清除舊的關心訊息記錄"""
+    today_str = get_taiwan_today().strftime('%Y-%m-%d')
+    global care_messages_sent
+    care_messages_sent = {record for record in care_messages_sent if today_str in record}
+    print(f"🧹 已清除舊的關心訊息記錄")
 
 def generate_ai_response(user_message: str, user_id: str) -> Optional[str]:
     """使用 Google Gemini 生成 AI 回應"""
@@ -125,8 +200,7 @@ def generate_ai_response(user_message: str, user_id: str) -> Optional[str]:
 - 適當使用表情符號，讓對話更生動
 
 功能與專長：
-- 專精：生活建議、股票查詢、節日提醒、人生開導
-- 股票：可提供基本股價資訊，但會提醒不是投資建議（「騷鵝說投資要小心」）
+- 專精：生活建議、節日提醒、人生開導
 - 節日：會自動提醒重要節日，特別關心家庭和愛情相關的節日
 - 人生開導：當需要開導或鼓勵別人時，經常引用「騷鵝常跟我說...」然後分享有智慧的名言佳句
 
@@ -157,67 +231,13 @@ def should_use_ai_response(user_message: str) -> bool:
     existing_functions = [
         '測試', '說明', '幫助', '功能', '使用說明',
         '節日', '查看節日', '重要節日', '紀念日', '生日',
-        '手動檢查', '時間', '股票', '股價', '查詢股票'
+        '手動檢查', '時間'
     ]
     
     for keyword in existing_functions:
         if keyword in user_message:
             return False
     return True
-
-class StockService:
-    """簡化的股票服務類別"""
-    
-    @staticmethod
-    def validate_stock_symbol(symbol: str) -> tuple[bool, str]:
-        """驗證股票代碼"""
-        try:
-            ticker = yf.Ticker(symbol.upper())
-            hist = ticker.history(period="5d")
-            
-            if not hist.empty:
-                return True, f"✅ {symbol.upper()}: 有效股票代碼"
-            else:
-                return False, f"❌ {symbol.upper()}: 無法獲得股價資訊"
-        except Exception as e:
-            return False, f"❌ {symbol.upper()}: 驗證失敗"
-    
-    @staticmethod
-    def get_stock_info(symbol: str) -> str:
-        """獲取股票基本資訊"""
-        try:
-            ticker = yf.Ticker(symbol.upper())
-            info = ticker.info
-            hist = ticker.history(period="1d")
-            
-            if hist.empty:
-                return f"❌ 無法獲取 {symbol.upper()} 的股價資訊"
-            
-            current_price = hist['Close'].iloc[-1]
-            company_name = info.get('shortName', symbol.upper())
-            market_cap = info.get('marketCap', 'N/A')
-            pe_ratio = info.get('trailingPE', 'N/A')
-            
-            # 格式化市值
-            if isinstance(market_cap, (int, float)):
-                if market_cap >= 1e12:
-                    market_cap_str = f"{market_cap/1e12:.2f}兆美元"
-                elif market_cap >= 1e9:
-                    market_cap_str = f"{market_cap/1e9:.2f}億美元"
-                else:
-                    market_cap_str = f"{market_cap/1e6:.2f}百萬美元"
-            else:
-                market_cap_str = "未知"
-            
-            return f"""📊 {company_name} ({symbol.upper()})
-💰 當前股價: ${current_price:.2f}
-🏢 市值: {market_cap_str}
-📈 本益比: {pe_ratio if pe_ratio != 'N/A' else '未知'}
-
-⚠️ 僅供參考，投資前請諮詢專業顧問"""
-            
-        except Exception as e:
-            return f"❌ 獲取 {symbol.upper()} 資訊失敗：{str(e)}"
 
 def calculate_days_until(target_date_str):
     """計算距離目標日期還有幾天（使用台灣時間）"""
@@ -328,7 +348,7 @@ def home():
     return f"""
     🤖 智能生活助手運行中！<br>
     台灣時間: {taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}<br>
-    功能: 節日提醒 + AI對話 + 股票查詢<br>
+    功能: 節日提醒 + AI對話 + 24小時關懷<br>
     狀態: 正常運行<br>
     連結用戶數: {len(USERS)} 位<br>
     """
@@ -357,11 +377,30 @@ def manual_check():
         print(f"手動檢查錯誤：{e}")
         return f"❌ 檢查失敗：{e}", 500
 
+@app.route("/check_care", methods=['GET'])
+def manual_check_care():
+    """手動觸發24小時關懷檢查"""
+    try:
+        check_wife_inactive_and_send_care()
+        taiwan_time = get_taiwan_now()
+        return f"✅ 關懷檢查完成 (台灣時間: {taiwan_time.strftime('%Y-%m-%d %H:%M:%S')})", 200
+    except Exception as e:
+        print(f"關懷檢查錯誤：{e}")
+        return f"❌ 關懷檢查失敗：{e}", 500
+
 @app.route("/status", methods=['GET'])
 def status():
     """顯示機器人狀態和時間資訊"""
     taiwan_time = get_taiwan_now()
     utc_time = datetime.datetime.utcnow()
+
+    # 計算老婆最後對話時間
+    wife_last_time = "從未對話"
+    wife_inactive_hours = 0
+    if WIFE_USER_ID in last_conversation_time:
+        wife_last_time = last_conversation_time[WIFE_USER_ID].strftime('%Y-%m-%d %H:%M:%S')
+        time_diff = taiwan_time - last_conversation_time[WIFE_USER_ID]
+        wife_inactive_hours = time_diff.total_seconds() / 3600
 
     status_info = {
         "status": "運行中",
@@ -371,7 +410,10 @@ def status():
         "holidays_count": len(IMPORTANT_DATES),
         "connected_users": len(USERS),
         "user_list": list(USERS.keys()),
-        "features": "節日提醒 + AI對話 + 股票查詢"
+        "wife_last_conversation": wife_last_time,
+        "wife_inactive_hours": round(wife_inactive_hours, 1),
+        "care_messages_sent_today": len(care_messages_sent),
+        "features": "節日提醒 + AI對話 + 24小時關懷"
     }
 
     return json.dumps(status_info, ensure_ascii=False, indent=2)
@@ -381,6 +423,9 @@ def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text.strip()
     user_name = get_user_name(user_id)
+
+    # 更新最後對話時間
+    update_last_conversation_time(user_id)
 
     print(f"\n=== 收到新訊息 ===")
     print(f"用戶: {user_name} ({user_id})")
@@ -393,17 +438,13 @@ def handle_message(event):
         # 1. 測試功能
         if user_message == "測試":
             taiwan_time = get_taiwan_now()
-            reply_message = f"✅ 機器人運作正常！\n⏰ 台灣時間：{taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}\n🔧 功能：節日提醒 + AI對話 + 股票查詢\n👋 您好，{user_name}！"
+            reply_message = f"✅ 機器人運作正常！\n⏰ 台灣時間：{taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}\n🔧 功能：節日提醒 + AI對話 + 24小時關懷\n👋 您好，{user_name}！"
             print("🧪 回應測試訊息")
 
         # 2. 說明功能
         elif user_message in ['說明', '幫助', '功能', '使用說明']:
             reply_message = f"""🤖 智能生活助手使用說明
 👋 您好，{user_name}！
-
-📊 股票功能：
-• 股票 AAPL (查詢單支股票)
-• 驗證 MSFT (驗證股票代碼)
 
 📅 節日提醒：
 • 查看節日 (或直接說「節日」)
@@ -412,6 +453,10 @@ def handle_message(event):
 🤖 AI對話：
 • 直接輸入任何問題或想法
 • 我會以「灰鵝」的身份回應
+
+💕 24小時關懷：
+• 自動監控老婆對話頻率
+• 超過24小時沒互動會主動關心老婆
 
 🔧 其他功能：
 • 測試 (檢查機器人狀態)
@@ -437,19 +482,7 @@ def handle_message(event):
             reply_message = f"⏰ 時間資訊：\n台灣時間: {taiwan_time.strftime('%Y-%m-%d %H:%M:%S %Z')}\nUTC時間: {utc_time.strftime('%Y-%m-%d %H:%M:%S UTC')}"
             print("⏰ 回應時間查詢")
 
-        # 6. 股票功能
-        elif user_message.startswith("股票 ") or user_message.startswith("股價 "):
-            stock_symbol = user_message.split(" ", 1)[1].strip().upper()
-            reply_message = StockService.get_stock_info(stock_symbol)
-            print("📊 回應股票查詢")
-
-        elif user_message.startswith("驗證 "):
-            stock_symbol = user_message.split(" ", 1)[1].strip().upper()
-            is_valid, validation_message = StockService.validate_stock_symbol(stock_symbol)
-            reply_message = validation_message
-            print("🔍 回應股票驗證")
-
-        # 7. AI 智能對話
+        # 6. AI 智能對話
         elif should_use_ai_response(user_message):
             print(f"🤖 使用 AI 生成回應 ({user_name})")
             ai_response = generate_ai_response(user_message, user_id)
@@ -461,9 +494,9 @@ def handle_message(event):
                 reply_message = f"""🤖 您好{user_name}！我是智能生活助手
 
 我可以幫您：
-📊 股票查詢：「股票 AAPL」
 📅 節日提醒：「查看節日」  
 🤖 AI對話：直接說出您的想法
+💕 24小時關懷：自動關心老婆
 
 輸入「說明」查看完整功能"""
                 print("🤖 AI 回應失敗，使用預設回應")
@@ -487,48 +520,40 @@ def handle_message(event):
         print("💬 跳過錯誤回覆，避免 token 重複使用")
 
 def run_scheduler():
-    """運行排程器（使用台灣時區）"""
-    # 每天台灣時間凌晨00:00檢查
-    schedule.every().day.at("00:00").do(check_all_holidays)
-    # 每天台灣時間中午12:00檢查
-    schedule.every().day.at("12:00").do(check_all_holidays)
-    # 每天台灣時間凌晨01:00清除舊提醒記錄
-    schedule.every().day.at("01:00").do(clear_old_reminders)
+    """運行排程器"""
+    # 每天檢查節日提醒
+    schedule.every().day.at("09:00").do(check_all_holidays)
+    schedule.every().day.at("18:00").do(check_all_holidays)
+    
+    # 每小時檢查24小時關懷
+    schedule.every().hour.do(check_wife_inactive_and_send_care)
+    
+    # 每天清除舊記錄
+    schedule.every().day.at("00:30").do(clear_old_reminders)
+    schedule.every().day.at("00:35").do(clear_old_care_records)
 
-    print(f"排程器已啟動 - 將在每天台灣時間 00:00 和 12:00 執行檢查")
-    print(f"當前台灣時間: {get_taiwan_now()}")
-    print(f"已連結用戶: {list(USERS.keys())}")
-
+    print("📅 排程器已啟動")
     while True:
-        try:
-            schedule.run_pending()
-            time.sleep(60)  # 每 60 秒檢查一次排程
-        except Exception as e:
-            print(f"排程器錯誤：{e}")
-            time.sleep(60)
+        schedule.run_pending()
+        time.sleep(60)
 
-# 初始化
-print("🚀 正在啟動智能生活助手...")
-print(f"⏰ 當前台灣時間：{get_taiwan_now()}")
-print(f"👥 已連結用戶數：{len(USERS)}")
-for user_type, user_id in USERS.items():
-    print(f"  - {user_type}: {user_id}")
-
-# 在背景執行排程器
-scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
-scheduler_thread.start()
-
-# 在背景執行自我喚醒（僅在 Render 環境中）
-if os.environ.get('RENDER'):
+if __name__ == '__main__':
+    print("🚀 啟動智能生活助手...")
+    print(f"台灣時間: {get_taiwan_now()}")
+    print(f"已設定節日數量: {len(IMPORTANT_DATES)}")
+    print(f"連接用戶數: {len(USERS)}")
+    
+    # 啟動排程器線程
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
+    print("📅 排程器線程已啟動")
+    
+    # 啟動自我喚醒線程（避免 Render 休眠）
     keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
     keep_alive_thread.start()
-    print("🔄 自我喚醒機制已啟動")
-
-# 執行啟動檢查
-print("執行啟動檢查...")
-check_all_holidays()
-
-if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
-    print(f"🌐 應用程式啟動在 port {port}")
+    print("💓 自我喚醒線程已啟動")
+    
+    # 啟動 Flask 應用
+    port = int(os.environ.get('PORT', 8000))
+    print(f"🌐 Flask 應用啟動在端口 {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
