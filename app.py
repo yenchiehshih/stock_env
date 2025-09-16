@@ -72,6 +72,11 @@ IMPORTANT_DATES = {
     "蝦皮慶典": "2025-09-09",
 }
 
+# 動態下班提醒相關
+daily_work_end_time = None
+work_end_reminders_set = False
+work_end_reminders_sent = set()
+
 # 用來記錄已發送的提醒
 sent_reminders = set()
 
@@ -640,6 +645,8 @@ def parse_attendance_html(html_content):
 def send_daily_attendance():
     """發送每日出勤資料給使用者"""
     print(f"開始執行每日出勤資料查詢... {get_taiwan_now()}")
+    
+    global daily_work_end_time, work_end_reminders_set
 
     try:
         attendance_data = get_futai_attendance()
@@ -648,14 +655,23 @@ def send_daily_attendance():
             user_attendance = attendance_data.get(FUTAI_USERNAME)
 
             if user_attendance:
+                # 取得下班時間並設定動態提醒
+                work_end_str = user_attendance['work_end']  # 格式: "17:30"
+                daily_work_end_time = work_end_str
+                
+                # 設定今日的下班提醒
+                setup_work_end_reminders(work_end_str)
+                
                 message = f"""📋 今日出勤資料 ({user_attendance['date']})
 
 👤 {user_attendance['name']} ({FUTAI_USERNAME})
 🕐 上班：{user_attendance['work_start']}
-🕕 下班：{user_attendance['work_end']}
+🕕 預估下班：{user_attendance['work_end']}
 
 💡 所有刷卡時間：{', '.join(user_attendance['times'])}
-⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}
+
+🔔 已設定下班前提醒：1小時、30分鐘、10分鐘、5分鐘"""
             else:
                 message = f"""⚠️ 未找到今日出勤資料
 
@@ -678,7 +694,120 @@ def send_daily_attendance():
 
     except Exception as e:
         print(f"發送每日出勤資料失敗：{e}")
+        
+def setup_work_end_reminders(work_end_str):
+    """根據下班時間設定動態提醒"""
+    global work_end_reminders_set, work_end_reminders_sent
+    
+    try:
+        # 解析下班時間
+        work_end_time = datetime.datetime.strptime(work_end_str, '%H:%M').time()
+        today = get_taiwan_today()
+        work_end_datetime = datetime.datetime.combine(today, work_end_time)
+        work_end_datetime = TAIWAN_TZ.localize(work_end_datetime)
+        
+        # 計算提醒時間
+        reminder_times = {
+            '1小時前': work_end_datetime - timedelta(hours=1),
+            '30分鐘前': work_end_datetime - timedelta(minutes=30),
+            '10分鐘前': work_end_datetime - timedelta(minutes=10),
+            '5分鐘前': work_end_datetime - timedelta(minutes=5)
+        }
+        
+        current_time = get_taiwan_now()
+        
+        print(f"📅 設定下班提醒 - 預估下班時間: {work_end_str}")
+        for desc, reminder_time in reminder_times.items():
+            if reminder_time > current_time:
+                print(f"  ⏰ {desc}: {reminder_time.strftime('%H:%M')}")
+            else:
+                print(f"  ❌ {desc}: {reminder_time.strftime('%H:%M')} (已過時)")
+        
+        work_end_reminders_set = True
+        
+    except Exception as e:
+        print(f"設定下班提醒失敗：{e}")
+        work_end_reminders_set = False
 
+
+def check_work_end_reminders():
+    """檢查是否需要發送下班提醒"""
+    global daily_work_end_time, work_end_reminders_sent
+    
+    if not daily_work_end_time:
+        return
+    
+    try:
+        # 解析下班時間
+        work_end_time = datetime.datetime.strptime(daily_work_end_time, '%H:%M').time()
+        today = get_taiwan_today()
+        work_end_datetime = datetime.datetime.combine(today, work_end_time)
+        work_end_datetime = TAIWAN_TZ.localize(work_end_datetime)
+        
+        current_time = get_taiwan_now()
+        
+        # 檢查各個提醒點
+        reminder_configs = [
+            {'minutes': 60, 'desc': '1小時前', 'key': '60min'},
+            {'minutes': 30, 'desc': '30分鐘前', 'key': '30min'},
+            {'minutes': 10, 'desc': '10分鐘前', 'key': '10min'},
+            {'minutes': 5, 'desc': '5分鐘前', 'key': '5min'}
+        ]
+        
+        today_str = today.strftime('%Y-%m-%d')
+        
+        for config in reminder_configs:
+            reminder_time = work_end_datetime - timedelta(minutes=config['minutes'])
+            reminder_id = f"work_end_{config['key']}_{today_str}"
+            
+            # 檢查是否到了提醒時間（只在時間到了或過了才提醒）
+            time_diff = (current_time - reminder_time).total_seconds()
+            
+            # 如果當前時間已經過了提醒時間，且在2分鐘內（避免重複提醒）
+            if 0 <= time_diff <= 120 and reminder_id not in work_end_reminders_sent:
+                send_work_end_reminder(config['desc'], daily_work_end_time)
+                work_end_reminders_sent.add(reminder_id)
+                print(f"✅ 已發送下班提醒：{config['desc']}")
+                
+    except Exception as e:
+        print(f"檢查下班提醒時發生錯誤：{e}")
+
+
+def send_work_end_reminder(time_desc, work_end_time):
+    """發送下班提醒訊息"""
+    taiwan_time = get_taiwan_now()
+    
+    message = f"""🏠 下班提醒 - {time_desc}
+
+⏰ 現在時間：{taiwan_time.strftime('%H:%M')}
+🕕 預估下班：{work_end_time}
+📋 記得打卡下班哦！
+
+💡 溫馨提醒：
+• 整理好桌面和文件
+• 確認明天的工作安排
+• 注意回家路上的交通安全
+
+💕 辛苦了！你的灰鵝在家等你～"""
+
+    try:
+        line_bot_api.push_message(YOUR_USER_ID, TextSendMessage(text=message))
+        print(f"✅ 已發送{time_desc}下班提醒 - {taiwan_time}")
+    except Exception as e:
+        print(f"❌ 發送{time_desc}下班提醒失敗：{e}")
+
+
+def clear_work_end_records():
+    """清除下班提醒相關記錄"""
+    global daily_work_end_time, work_end_reminders_set, work_end_reminders_sent
+    
+    daily_work_end_time = None
+    work_end_reminders_set = False
+    
+    # 清除所有舊的提醒記錄，準備新的一天
+    work_end_reminders_sent.clear()
+    
+    print(f"🧹 已清除下班提醒記錄")
 
 # ============== AI 對話功能 ==============
 
@@ -1167,19 +1296,6 @@ def run_scheduler():
 
     # 每小時檢查24小時關懷
     schedule.every().hour.do(check_wife_inactive_and_send_care)
-
-    # 上下班提醒（僅工作日）
-    schedule.every().monday.at("08:30").do(send_work_reminder, "work_start")
-    schedule.every().tuesday.at("08:30").do(send_work_reminder, "work_start")
-    schedule.every().wednesday.at("08:30").do(send_work_reminder, "work_start")
-    schedule.every().thursday.at("08:30").do(send_work_reminder, "work_start")
-    schedule.every().friday.at("08:30").do(send_work_reminder, "work_start")
-
-    schedule.every().monday.at("17:30").do(send_work_reminder, "work_end")
-    schedule.every().tuesday.at("17:30").do(send_work_reminder, "work_end")
-    schedule.every().wednesday.at("17:30").do(send_work_reminder, "work_end")
-    schedule.every().thursday.at("17:30").do(send_work_reminder, "work_end")
-    schedule.every().friday.at("17:30").do(send_work_reminder, "work_end")
 
     # 每天清除舊記錄
     schedule.every().day.at("00:01").do(clear_daily_welcome_records)
