@@ -30,14 +30,13 @@ app = Flask(__name__)
 TAIWAN_TZ = pytz.timezone('Asia/Taipei')
 
 # Line Bot 設定 - 從環境變數取得
-CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN',
-                                      'MsciPKbYboUZrp+kQnLd7l8+E8GAlS5955bfuq+gb8wVYv7qWBHEdd7xK5yiMTb6zMTPofz0AoSFZLWcHwFMWpKsrJcsI2aOcs5kv8SP6NLLdkoLFPwHjgpeF34p2nwiqNf9v4YkssL9rYkuLmC9cwdB04t89/1O/w1cDnyilFU=')
-CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET', 'f18185f19bab8d49ad8be38932348426')
+CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN')
+CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET')
 
 # 用戶設定 - 支援多個用戶
 USERS = {
-    'husband': os.environ.get('HUSBAND_USER_ID', 'U1c154a6d977e6a48ecf998689e26e8c1'),
-    'wife': os.environ.get('WIFE_USER_ID', 'U36fd49e2754b2132e39a543b98e3ea00')
+    'husband': os.environ.get('HUSBAND_USER_ID'),
+    'wife': os.environ.get('WIFE_USER_ID')
 }
 
 # 為了向後兼容，保留原來的變數名
@@ -45,15 +44,15 @@ YOUR_USER_ID = USERS['husband']
 WIFE_USER_ID = USERS['wife']
 
 # 出勤查詢設定 - 從環境變數取得
-FUTAI_USERNAME = os.environ.get('FUTAI_USERNAME', '2993')
-FUTAI_PASSWORD = os.environ.get('FUTAI_PASSWORD', 'd72853')
+FUTAI_USERNAME = os.environ.get('FUTAI_USERNAME')
+FUTAI_PASSWORD = os.environ.get('FUTAI_PASSWORD')
 
 # Line Bot API 設定
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
 # 設定 Google Gemini API
-GOOGLE_AI_API_KEY = os.environ.get('GOOGLE_AI_API_KEY', 'AIzaSyCmhohCrMS_M0hOK1lyqOuByIRt-QcV_Is')
+GOOGLE_AI_API_KEY = os.environ.get('GOOGLE_AI_API_KEY')
 if GOOGLE_AI_API_KEY:
     genai.configure(api_key=GOOGLE_AI_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
