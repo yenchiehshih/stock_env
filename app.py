@@ -419,7 +419,7 @@ def improved_query_process(driver, wait, today_str):
     return False
 
 def get_futai_attendance():
-    """抓取富泰出勤資料（更新版本）"""
+    """抓取富台出勤資料（更新版本）"""
     driver = None
     try:
         print(f"開始抓取出勤資料... {get_taiwan_now()}")
@@ -934,7 +934,7 @@ def manual_check_care():
 def status():
     """顯示機器人狀態和時間資訊"""
     taiwan_time = get_taiwan_now()
-    utc_time = datetime.datetime.utcnow()
+    utc_time = datetime.datetime.now(datetime.timezone.utc)
 
     # 計算老婆最後對話時間
     wife_last_time = "從未對話"
