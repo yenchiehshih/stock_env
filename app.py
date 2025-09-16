@@ -12,6 +12,7 @@ from linebot.exceptions import InvalidSignatureError, LineBotApiError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from flask import Flask, request, abort
 import google.generativeai as genai
+from selenium.webdriver.common.keys import Keys
 
 # 出勤查詢相關套件
 from selenium import webdriver
@@ -20,7 +21,6 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
 from bs4 import BeautifulSoup
 import re
 from datetime import timedelta
@@ -31,11 +31,16 @@ app = Flask(__name__)
 TAIWAN_TZ = pytz.timezone('Asia/Taipei')
 
 # Line Bot 設定 - 從環境變數取得
+CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN',
+                                      'MsciPKbYboUZrp+kQnLd7l8+E8GAlS5955bfuq+gb8wVYv7qWBHEdd7xK5yiMTb6zMTPofz0AoSFZLWcHwFMWpKsrJcsI2aOcs5kv8SP6NLLdkoLFPwHjgpeF34p2nwiqNf9v4YkssL9rYkuLmC9cwdB04t89/1O/w1cDnyilFU=')
+CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET', 'f18185f19bab8d49ad8be38932348426')
 CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN')
 CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET')
 
 # 用戶設定 - 支援多個用戶
 USERS = {
+    'husband': os.environ.get('HUSBAND_USER_ID', 'U1c154a6d977e6a48ecf998689e26e8c1'),
+    'wife': os.environ.get('WIFE_USER_ID', 'U36fd49e2754b2132e39a543b98e3ea00')
     'husband': os.environ.get('HUSBAND_USER_ID'),
     'wife': os.environ.get('WIFE_USER_ID')
 }
@@ -45,6 +50,8 @@ YOUR_USER_ID = USERS['husband']
 WIFE_USER_ID = USERS['wife']
 
 # 出勤查詢設定 - 從環境變數取得
+FUTAI_USERNAME = os.environ.get('FUTAI_USERNAME', '2993')
+FUTAI_PASSWORD = os.environ.get('FUTAI_PASSWORD', 'd72853')
 FUTAI_USERNAME = os.environ.get('FUTAI_USERNAME')
 FUTAI_PASSWORD = os.environ.get('FUTAI_PASSWORD')
 
@@ -53,6 +60,7 @@ line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
 # 設定 Google Gemini API
+GOOGLE_AI_API_KEY = os.environ.get('GOOGLE_AI_API_KEY', 'AIzaSyCmhohCrMS_M0hOK1lyqOuByIRt-QcV_Is')
 GOOGLE_AI_API_KEY = os.environ.get('GOOGLE_AI_API_KEY')
 if GOOGLE_AI_API_KEY:
     genai.configure(api_key=GOOGLE_AI_API_KEY)
@@ -211,8 +219,7 @@ def clear_old_care_records():
     print(f"🧹 已清除舊的關心訊息記錄")
 
 
-# ============== 改進的出勤查詢功能 ==============
-
+# ============== 出勤查詢功能 ==============
 def get_chrome_options():
     """設定 Chrome 選項（適合 Render 環境）"""
     options = Options()
@@ -225,29 +232,28 @@ def get_chrome_options():
     options.add_argument('--disable-plugins')
     return options
 
-
 def click_query_button_improved(driver, wait):
     """改進的查詢按鈕點擊方法"""
     print("尋找並點擊查詢按鈕...")
-    
+
     try:
         # 等待按鈕可點擊
         query_button = wait.until(
             EC.element_to_be_clickable((By.XPATH, "//input[@name='Submit' and @value='查詢']"))
         )
-        
+
         # 滾動到按鈕位置，確保可見
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", query_button)
         time.sleep(1)
-        
+
         # 記錄點擊前的頁面狀態
         pre_click_html = driver.page_source
         pre_click_hash = hash(pre_click_html)
         print(f"點擊前頁面 hash: {pre_click_hash}")
-        
+
         # 多種方式嘗試點擊
         click_success = False
-        
+
         # 方法1: 普通點擊
         try:
             query_button.click()
@@ -255,7 +261,7 @@ def click_query_button_improved(driver, wait):
             click_success = True
         except Exception as e:
             print(f"普通點擊失敗: {e}")
-        
+
         # 方法2: JavaScript 點擊
         if not click_success:
             try:
@@ -264,7 +270,7 @@ def click_query_button_improved(driver, wait):
                 click_success = True
             except Exception as e:
                 print(f"JavaScript 點擊失敗: {e}")
-        
+
         # 方法3: 模擬 Enter 鍵
         if not click_success:
             try:
@@ -273,31 +279,31 @@ def click_query_button_improved(driver, wait):
                 click_success = True
             except Exception as e:
                 print(f"Enter 鍵觸發失敗: {e}")
-        
+
         if not click_success:
             raise Exception("所有點擊方法都失敗了")
-        
+
         # 等待頁面更新 - 使用多種方法驗證
         print("等待查詢結果載入...")
-        
+
         # 方法1: 等待頁面內容變化
         max_wait_time = 15
         start_time = time.time()
-        
+
         while time.time() - start_time < max_wait_time:
             time.sleep(1)
             current_html = driver.page_source
             current_hash = hash(current_html)
-            
+
             # 檢查頁面是否有變化
             if current_hash != pre_click_hash:
                 print(f"✓ 檢測到頁面內容變化 (等待了 {time.time() - start_time:.1f} 秒)")
                 break
-            
+
             print(f"等待中... ({time.time() - start_time:.1f}s)")
         else:
             print("⚠ 警告: 超時未檢測到頁面變化")
-        
+
         # 方法2: 等待特定的載入指標消失或出現
         try:
             # 假設有載入指標，等待它消失
@@ -307,13 +313,13 @@ def click_query_button_improved(driver, wait):
             print("✓ 載入指標已消失")
         except:
             print("沒有找到載入指標，繼續執行")
-        
+
         # 方法3: 額外等待時間確保資料完全載入
         time.sleep(3)
         print("查詢完成，準備抓取結果")
-        
+
         return True
-        
+
     except Exception as e:
         print(f"查詢按鈕點擊失敗: {e}")
         return False
@@ -322,10 +328,10 @@ def click_query_button_improved(driver, wait):
 def verify_query_result(driver, expected_date):
     """驗證查詢結果是否正確"""
     print(f"驗證查詢結果是否包含日期: {expected_date}")
-    
+
     try:
         html_content = driver.page_source
-        
+
         # 檢查多種日期格式
         today = datetime.datetime.strptime(expected_date, '%Y/%m/%d')
         date_formats = [
@@ -333,14 +339,14 @@ def verify_query_result(driver, expected_date):
             f"{today.year}/{today.month:02d}/{today.day:02d}",  # 2025/09/16
             f"{today.year}-{today.month:02d}-{today.day:02d}",  # 2025-09-16
         ]
-        
+
         found_date = False
         for date_format in date_formats:
             if date_format in html_content:
                 print(f"✓ 找到完整日期: {date_format}")
                 found_date = True
                 break
-        
+
         if not found_date:
             # 列出頁面中實際找到的日期
             dates_in_page = re.findall(r'\d{4}/\d{1,2}/\d{1,2}', html_content)
@@ -350,9 +356,9 @@ def verify_query_result(driver, expected_date):
             else:
                 print("⚠ 頁面中未找到任何日期格式")
                 return False, []
-        
+
         return True, []
-        
+
     except Exception as e:
         print(f"驗證查詢結果時發生錯誤: {e}")
         return False, []
@@ -361,16 +367,16 @@ def verify_query_result(driver, expected_date):
 def improved_query_process(driver, wait, today_str):
     """改進的查詢流程"""
     max_retries = 3
-    
+
     for attempt in range(max_retries):
         print(f"\n=== 查詢嘗試 {attempt + 1}/{max_retries} ===")
-        
+
         # 重新設定日期（確保每次嘗試都是最新的）
         try:
             print("重新設定查詢日期...")
             driver.execute_script(f"document.getElementById('FindDate').value = '{today_str}';")
             driver.execute_script(f"document.getElementById('FindEDate').value = '{today_str}';")
-            
+
             # 觸發 change 事件
             driver.execute_script(
                 "document.getElementById('FindDate').dispatchEvent(new Event('change', {bubbles: true}));"
@@ -378,29 +384,29 @@ def improved_query_process(driver, wait, today_str):
             driver.execute_script(
                 "document.getElementById('FindEDate').dispatchEvent(new Event('change', {bubbles: true}));"
             )
-            
+
             time.sleep(1)
-            
+
             # 驗證日期是否設定成功
             updated_start = driver.find_element(By.ID, 'FindDate').get_attribute('value')
             updated_end = driver.find_element(By.ID, 'FindEDate').get_attribute('value')
             print(f"設定後的日期值 - 開始: {updated_start}, 結束: {updated_end}")
-            
+
             if updated_start != today_str or updated_end != today_str:
                 print("⚠ 日期設定失敗，重試...")
                 continue
-                
+
             print(f"✓ 日期設定成功: {today_str}")
-            
+
         except Exception as e:
             print(f"重新設定日期失敗: {e}")
             continue
-        
+
         # 點擊查詢按鈕
         if click_query_button_improved(driver, wait):
             # 驗證結果
             is_correct, found_dates = verify_query_result(driver, today_str)
-            
+
             if is_correct:
                 print(f"✅ 查詢成功！獲得了正確日期的資料")
                 return True
@@ -416,13 +422,12 @@ def improved_query_process(driver, wait, today_str):
                 print("等待後重試...")
                 time.sleep(2)
                 continue
-    
+
     print("⚠ 所有查詢嘗試都失敗了")
     return False
 
-
 def get_futai_attendance():
-    """抓取富泰出勤資料 - 改進版本"""
+    """抓取富泰出勤資料（更新版本）"""
     driver = None
     try:
         print(f"開始抓取出勤資料... {get_taiwan_now()}")
@@ -432,7 +437,6 @@ def get_futai_attendance():
         wait = WebDriverWait(driver, 10)
 
         # 登入
-        print("開始登入...")
         driver.get('https://eportal.futai.com.tw/Home/Login?ReturnUrl=%2F')
 
         id_field = wait.until(EC.presence_of_element_located((By.ID, 'Account')))
@@ -443,7 +447,6 @@ def get_futai_attendance():
         pwd_field.submit()
 
         time.sleep(3)
-        print("登入成功，導航到目標頁面...")
 
         # 導航到目標頁面
         driver.get('https://eportal.futai.com.tw/Futai/Default/Index/70')
@@ -452,83 +455,107 @@ def get_futai_attendance():
         # 獲取今天日期
         now = get_taiwan_now()
         today_str = f"{now.year}/{now.month}/{now.day}"
+
         print(f"今天是: {today_str}")
 
-        # 切換到 iframe
-        print("尋找並切換到 iframe...")
-        iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
-        driver.switch_to.frame(iframe)
-        time.sleep(2)
-        print("已切換到 iframe")
-
-        # 直接設定日期值
-        print("直接設定日期值...")
         try:
-            print(f"使用 JavaScript 設定日期為 {today_str}")
-            
-            # 直接設定值
-            driver.execute_script(f"document.getElementById('FindDate').value = '{today_str}';")
-            driver.execute_script(f"document.getElementById('FindEDate').value = '{today_str}';")
+            # 1. 切換到 iframe
+            print("尋找並切換到 iframe...")
+            iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
+            driver.switch_to.frame(iframe)
+            print("已切換到 iframe")
 
-            # 觸發 change 事件以確保表單知道值已更改
-            driver.execute_script(
-                "document.getElementById('FindDate').dispatchEvent(new Event('change', {bubbles: true}));")
-            driver.execute_script(
-                "document.getElementById('FindEDate').dispatchEvent(new Event('change', {bubbles: true}));")
+            # 等待 iframe 內容載入
+            time.sleep(2)
 
-            time.sleep(1)
-            print("JavaScript 設定完成")
+            # 2. 直接設定日期值（不使用日曆彈出視窗）
+            print("直接設定日期值...")
 
-        except Exception as e:
-            print(f"JavaScript 方法失敗: {e}")
-            # 備用方法: 使用 Selenium 直接操作
+            # 使用 JavaScript 直接設定並觸發事件
             try:
-                print("嘗試移除 readonly 屬性並直接輸入...")
-                driver.execute_script("document.getElementById('FindDate').removeAttribute('readonly');")
-                driver.execute_script("document.getElementById('FindEDate').removeAttribute('readonly');")
+                print(f"使用 JavaScript 設定日期為 {today_str}")
 
-                start_date_input = driver.find_element(By.ID, 'FindDate')
-                end_date_input = driver.find_element(By.ID, 'FindEDate')
+                # 直接設定值
+                driver.execute_script(f"document.getElementById('FindDate').value = '{today_str}';")
+                driver.execute_script(f"document.getElementById('FindEDate').value = '{today_str}';")
 
-                start_date_input.clear()
-                start_date_input.send_keys(today_str)
+                # 觸發 change 事件以確保表單知道值已更改
+                driver.execute_script(
+                    "document.getElementById('FindDate').dispatchEvent(new Event('change', {bubbles: true}));")
+                driver.execute_script(
+                    "document.getElementById('FindEDate').dispatchEvent(new Event('change', {bubbles: true}));")
 
-                end_date_input.clear()
-                end_date_input.send_keys(today_str)
+                # 等待一下讓變更生效
+                time.sleep(1)
 
-                print("直接輸入方法完成")
-            except Exception as e2:
-                print(f"直接輸入方法也失敗: {e2}")
+                print("JavaScript 設定完成")
 
-        # 驗證日期是否設定成功
-        try:
-            updated_start = driver.find_element(By.ID, 'FindDate').get_attribute('value')
-            updated_end = driver.find_element(By.ID, 'FindEDate').get_attribute('value')
-            print(f"設定後的日期值 - 開始: {updated_start}, 結束: {updated_end}")
+            except Exception as e:
+                print(f"JavaScript 方法失敗: {e}")
 
-            if updated_start == today_str and updated_end == today_str:
-                print("✓ 日期設定成功！")
+                # 備用方法: 使用 Selenium 直接操作（移除 readonly 屬性）
+                try:
+                    print("嘗試移除 readonly 屬性並直接輸入...")
+
+                    # 移除 readonly 屬性
+                    driver.execute_script("document.getElementById('FindDate').removeAttribute('readonly');")
+                    driver.execute_script("document.getElementById('FindEDate').removeAttribute('readonly');")
+
+                    # 獲取元素並設定值
+                    start_date_input = driver.find_element(By.ID, 'FindDate')
+                    end_date_input = driver.find_element(By.ID, 'FindEDate')
+
+                    # 清空並輸入新值
+                    start_date_input.clear()
+                    start_date_input.send_keys(today_str)
+
+                    end_date_input.clear()
+                    end_date_input.send_keys(today_str)
+
+                    print("直接輸入方法完成")
+
+                except Exception as e2:
+                    print(f"直接輸入方法也失敗: {e2}")
+
+            # 3. 驗證日期是否設定成功
+            try:
+                updated_start = driver.find_element(By.ID, 'FindDate').get_attribute('value')
+                updated_end = driver.find_element(By.ID, 'FindEDate').get_attribute('value')
+                print(f"設定後的日期值 - 開始: {updated_start}, 結束: {updated_end}")
+
+                if updated_start == today_str and updated_end == today_str:
+                    print("✓ 日期設定成功！")
+                else:
+                    print("⚠ 日期可能未正確設定")
+
+            except Exception as e:
+                print(f"驗證日期時發生錯誤: {e}")
+
+            # 4. 執行改進的查詢流程
+            print("開始執行改進的查詢流程...")
+
+            if improved_query_process(driver, wait, today_str):
+                # 5. 獲取 iframe 內的 HTML
+                html_content = driver.page_source
+                print(f"成功獲取 HTML，長度: {len(html_content)} 字元")
+
+                # 6. 切換回主頁面
+                driver.switch_to.default_content()
+                print("已切換回主頁面")
+
+                return parse_attendance_html(html_content)
             else:
-                print("⚠ 日期可能未正確設定")
-        except Exception as e:
-            print(f"驗證日期時發生錯誤: {e}")
+                print("查詢流程失敗")
+                driver.switch_to.default_content()
+                return None
 
-        # 執行改進的查詢流程
-        print("開始執行改進的查詢流程...")
-        
-        if improved_query_process(driver, wait, today_str):
-            # 獲取 iframe 內的 HTML
-            html_content = driver.page_source
-            print(f"成功獲取 HTML，長度: {len(html_content)} 字元")
-            
-            # 切換回主頁面
-            driver.switch_to.default_content()
-            print("已切換回主頁面")
-            
-            return parse_attendance_html(html_content)
-        else:
-            print("查詢流程失敗")
-            driver.switch_to.default_content()
+        except Exception as e:
+            print(f"iframe 操作發生錯誤: {e}")
+            # 確保切換回主頁面
+            try:
+                driver.switch_to.default_content()
+            except:
+                pass
             return None
 
     except Exception as e:
@@ -543,7 +570,7 @@ def get_futai_attendance():
 
 
 def parse_attendance_html(html_content):
-    """解析出勤 HTML 資料"""
+    """解析出勤 HTML 資料（更新版本）"""
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
         table = soup.find('table', {'width': '566', 'border': '1'})
@@ -562,8 +589,8 @@ def parse_attendance_html(html_content):
             try:
                 employee_id = cells[0].get_text(strip=True)
                 employee_name = cells[1].get_text(strip=True)
-                raw_date = cells[2].get_text(strip=True)  # 改名為 raw_date
-                
+                raw_date = cells[2].get_text(strip=True)
+
                 # 🔧 修正日期格式標準化
                 try:
                     # 如果日期是 YYYY/MM/DD 格式，轉換為 YYYY/M/D
@@ -576,9 +603,9 @@ def parse_attendance_html(html_content):
                             date = raw_date
                     else:
                         date = raw_date
-                        
-                    print(f"🔍 日期解析 - 原始: {raw_date}, 處理後: {date}")  # 加入偵錯
-                        
+
+                    print(f"🔍 日期解析 - 原始: {raw_date}, 處理後: {date}")
+
                 except Exception as date_error:
                     date = raw_date
                     print(f"⚠️ 日期解析失敗: {date_error}")
@@ -952,22 +979,22 @@ def send_work_reminder(reminder_type):
     if reminder_type == "work_start":
         message = f"""🌅 早安！準備上班囉！
 
-⏰ 現在時間：{taiwan_time.strftime('%H:%M')}
-💼 記得帶好工作用品
-🚗 注意交通安全
-☕ 今天也要加油哦！
+    ⏰ 現在時間：{taiwan_time.strftime('%H:%M')}
+    💼 記得帶好工作用品
+    🚗 注意交通安全
+    ☕ 今天也要加油哦！
 
-💕 你的灰鵝永遠支持你～"""
+    💕 你的灰鵝永遠支持你～"""
 
     elif reminder_type == "work_end":
         message = f"""🎉 辛苦了！下班時間到！
 
-⏰ 現在時間：{taiwan_time.strftime('%H:%M')}
-🏠 記得打卡下班
-🚗 回家路上小心
-😊 今天也辛苦了！
+    ⏰ 現在時間：{taiwan_time.strftime('%H:%M')}
+    🏠 記得打卡下班
+    🚗 回家路上小心
+    😊 今天也辛苦了！
 
-💕 回家後記得跟灰鵝聊天哦～"""
+    💕 回家後記得跟灰鵝聊天哦～"""
 
     try:
         # 發送給老公
