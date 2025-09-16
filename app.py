@@ -313,7 +313,26 @@ def parse_attendance_html(html_content):
             try:
                 employee_id = cells[0].get_text(strip=True)
                 employee_name = cells[1].get_text(strip=True)
-                date = cells[2].get_text(strip=True)
+                raw_date = cells[2].get_text(strip=True)  # 改名為 raw_date
+                
+                # 🔧 修正日期格式標準化
+                try:
+                    # 如果日期是 YYYY/MM/DD 格式，轉換為 YYYY/M/D
+                    if '/' in raw_date:
+                        parts = raw_date.split('/')
+                        if len(parts) == 3:
+                            year, month, day = parts
+                            date = f"{year}/{int(month)}/{int(day)}"
+                        else:
+                            date = raw_date
+                    else:
+                        date = raw_date
+                        
+                    print(f"🔍 日期解析 - 原始: {raw_date}, 處理後: {date}")  # 加入偵錯
+                        
+                except Exception as date_error:
+                    date = raw_date
+                    print(f"⚠️ 日期解析失敗: {date_error}")
 
                 times = []
                 for i in range(3, len(cells)):
