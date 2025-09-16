@@ -249,7 +249,7 @@ def get_futai_attendance():
 
         # 導航到目標頁面
         driver.get('https://eportal.futai.com.tw/Futai/Default/Index/70')
-        # time.sleep(3)
+        time.sleep(3)
 
         # 獲取今天日期
         now = get_taiwan_now()
@@ -258,7 +258,7 @@ def get_futai_attendance():
         # 切換到 iframe
         iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
         driver.switch_to.frame(iframe)
-        # time.sleep(2)
+        time.sleep(2)
 
         # 設定日期
         driver.execute_script(f"document.getElementById('FindDate').value = '{today_str}';")
@@ -270,10 +270,10 @@ def get_futai_attendance():
             "document.getElementById('FindEDate').dispatchEvent(new Event('change', {bubbles: true}));")
 
         # 點擊查詢
-        # time.sleep(2)
+        time.sleep(2)
         query_button = driver.find_element(By.XPATH, "//input[@name='Submit' and @value='查詢']")
         query_button.click()
-        # time.sleep(5)
+        time.sleep(5)
 
         # 獲取 HTML
         html_content = driver.page_source
