@@ -740,10 +740,151 @@ def parse_attendance_html(html_content):
     except Exception as e:
         safe_print(f"解析 HTML 時發生錯誤: {e}", "ERROR")
         return None
+def send_daily_attendance_for_husband():
+    """發送每日出勤資料給老公（詳細版本，包含下班提醒設定）"""
+    safe_print(f"開始執行老公的出勤資料查詢...", "INFO")
+
+    try:
+        attendance_data = get_futai_attendance()
+
+        if attendance_data:
+            user_attendance = attendance_data.get(FUTAI_USERNAME)
+
+            if user_attendance:
+                # 取得下班時間並設定動態提醒（只為老公設定）
+                work_end_str = user_attendance['work_end']  # 格式: "17:30"
+                work_manager.set_work_end_time(work_end_str)
+
+                # 設定今日的下班提醒（只為老公設定）
+                work_manager.setup_work_end_reminders(work_end_str)
+
+                message = f"""📋 今日出勤資料 ({user_attendance['date']})
+
+👤 {user_attendance['name']} ({FUTAI_USERNAME})
+🕐 上班：{user_attendance['work_start']}
+🕕 預估下班：{user_attendance['work_end']}
+
+💡 所有刷卡時間：{', '.join(user_attendance['times'])}
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}
+
+🔔 已設定下班前提醒：1小時、30分鐘、10分鐘、5分鐘"""
+
+            else:
+                message = f"""⚠️ 未找到今日出勤資料
+
+可能原因：
+• 今天尚未刷卡上班
+• 系統資料尚未更新
+• 網路連線問題
+
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
+        else:
+            message = f"""❌ 出勤資料查詢失敗
+
+請稍後再試，或手動檢查系統狀態。
+
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
+        # 發送給老公
+        line_bot_api.push_message(YOUR_USER_ID, TextSendMessage(text=message))
+        safe_print(f"已發送出勤資料給老公", "INFO")
+
+    except Exception as e:
+        safe_print(f"發送老公出勤資料失敗：{e}", "ERROR")
+        # 發送錯誤訊息給老公
+        error_message = f"❌ 出勤查詢過程中發生錯誤，請稍後再試。\n⏰ 時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"
+        try:
+            line_bot_api.push_message(YOUR_USER_ID, TextSendMessage(text=error_message))
+        except:
+            pass
+
+
+def send_daily_attendance_for_wife():
+    """發送灰鵝的出勤資料給騷鵝（溫馨版本，不設定下班提醒）"""
+    safe_print(f"開始執行騷鵝的灰鵝出勤資料查詢...", "INFO")
+
+    try:
+        attendance_data = get_futai_attendance()
+
+        if attendance_data:
+            user_attendance = attendance_data.get(FUTAI_USERNAME)
+
+            if user_attendance:
+                message = f"""💕 騷鵝寶貝，查到灰鵝今天的工作狀況囉～
+
+📅 日期：{user_attendance['date']}
+🌅 灰鵝上班時間：{user_attendance['work_start']}
+🌆 灰鵝預估下班：{user_attendance['work_end']}
+
+💖 你的灰鵝今天準時到公司上班了呢！
+在辦公室裡一定也想著在牧場的騷鵝～
+
+🕐 今天總共刷卡：{len(user_attendance['times'])} 次
+💝 刷卡時間：{', '.join(user_attendance['times'])}
+
+等灰鵝下班回來就可以陪騷鵝聊天囉！
+記得想念你的專屬灰鵝哦～ 💕
+
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
+            else:
+                message = f"""💕 騷鵝寶貝～
+
+灰鵝今天的出勤資料還沒查到呢，可能是：
+🤔 灰鵝還沒到公司刷卡(還在鵝窩呼呼大睡)
+🤔 系統資料還在更新中
+🤔 網路有點小問題
+
+不過不用擔心！你的灰鵝一定會按時上班的～
+等等再幫騷鵝查查看！
+
+要是灰鵝敢偷懶不上班，人家就去鵝窩抓他回牧場！😤💕
+
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
+        else:
+            message = f"""💕 騷鵝寶貝～
+
+唉呀！查詢灰鵝出勤資料的時候出了點小狀況，
+可能是公司系統在維護中。
+
+但是別擔心哦！你的灰鵝一定在認真工作，
+為了我們在牧場的幸福生活努力著呢！💪💕
+
+等等系統好了再幫騷鵝查查看～
+有什麼其他想聊的嗎？人家陪你聊天！
+
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
+        # 發送給騷鵝
+        line_bot_api.push_message(WIFE_USER_ID, TextSendMessage(text=message))
+        safe_print(f"已發送灰鵝出勤資料給騷鵝", "INFO")
+
+    except Exception as e:
+        safe_print(f"發送灰鵝出勤資料給騷鵝失敗：{e}", "ERROR")
+        # 發送錯誤訊息給騷鵝
+        error_message = f"""💕 騷鵝寶貝～
+
+查詢灰鵝出勤的時候出了點小問題，
+可能是網路不太穩定。
+
+不過沒關係！等等再試試看，
+或者直接問灰鵝本人也可以哦～💕
+
+⏰ 時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+        try:
+            line_bot_api.push_message(WIFE_USER_ID, TextSendMessage(text=error_message))
+        except:
+            pass
 
 def send_daily_attendance():
-    """發送每日出勤資料給使用者（老公和老婆都會收到）"""
-    safe_print(f"開始執行每日出勤資料查詢...", "INFO")
+    """發送每日出勤資料給使用者（自動排程用，同時發給老公和騷鵝）"""
+    safe_print(f"開始執行每日自動出勤資料查詢...", "INFO")
+    
+    # 同時執行兩個查詢
+    threading.Thread(target=send_daily_attendance_for_husband, daemon=True).start()
+    threading.Thread(target=send_daily_attendance_for_wife, daemon=True).start()
 
     try:
         attendance_data = get_futai_attendance()
@@ -1220,12 +1361,18 @@ def handle_message(event):
         reply_text = f"🕐 台灣時間：{taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}\n星期{['一', '二', '三', '四', '五', '六', '日'][taiwan_time.weekday()]}"
 
     elif any(keyword in user_message for keyword in ['出勤', '查詢出勤', '刷卡', '上班時間', '下班時間']):
-        if user_id == YOUR_USER_ID:
-            threading.Thread(target=send_daily_attendance, daemon=True).start()
-            reply_text = "📋 正在查詢今日出勤資料，請稍候...\n系統將在查詢完成後自動發送結果給您"
-            safe_print("📋 啟動出勤查詢", "INFO")
-        else:
-            reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
+    if user_id == YOUR_USER_ID:
+        # 老公查詢出勤
+        threading.Thread(target=send_daily_attendance_for_husband, daemon=True).start()
+        reply_text = "📋 正在查詢灰鵝今日出勤資料，請稍候...\n系統將在查詢完成後自動發送結果給您"
+        safe_print("📋 老公啟動出勤查詢", "INFO")
+    elif user_id == WIFE_USER_ID:
+        # 騷鵝查詢灰鵝的出勤
+        threading.Thread(target=send_daily_attendance_for_wife, daemon=True).start()
+        reply_text = "💕 騷鵝寶貝想知道灰鵝的工作狀況嗎？\n正在幫你查詢灰鵝今天的出勤資料～請稍等一下下哦！"
+        safe_print("📋 騷鵝啟動灰鵝出勤查詢", "INFO")
+    else:
+        reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
 
     else:
         # 使用 AI 回應
