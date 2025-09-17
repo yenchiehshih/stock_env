@@ -605,7 +605,7 @@ def improved_query_process(driver, wait, today_str):
 
 
 def get_futai_attendance():
-    """抓取富台出勤資料（更新版本）"""
+    """抓取富台出勤資料（修正版本）"""
     driver = None
     try:
         safe_print(f"開始抓取出勤資料...", "INFO")
@@ -616,7 +616,7 @@ def get_futai_attendance():
 
         # 登入
         driver.get('https://eportal.futai.com.tw/Home/Login?ReturnUrl=%2F')
-
+        
         id_field = wait.until(EC.presence_of_element_located((By.ID, 'Account')))
         id_field.send_keys(FUTAI_USERNAME)
 
@@ -626,129 +626,44 @@ def get_futai_attendance():
 
         time.sleep(3)
 
-        # 導航到目標頁面
-        driver.get('https://eportal.futai.com.tw/Futai/Default/Index/70')
+        # 使用測試成功的URL（關鍵修改）
+        driver.get('https://bpmflow.futai.com.tw/futaibpmflow/SignOnFutai.aspx?Account=2993&Token=QxY%2BV82RudxNLWk6ZPWQdiDWxUmcDvnLTJUKvhMIG08%3D&FunctionID=AB-ABS-04')
+        
         time.sleep(3)
 
         # 獲取今天日期
         now = get_taiwan_now()
         today_str = f"{now.year}/{now.month}/{now.day}"
 
-        safe_print(f"今天是: {today_str}", "INFO")
+        # 直接設定日期（不需要iframe）
+        driver.execute_script(f"document.getElementById('FindDate').value = '{today_str}';")
+        driver.execute_script(f"document.getElementById('FindEDate').value = '{today_str}';")
 
-        try:
-            # 1. 切換到 iframe
-            safe_print("尋找並切換到 iframe...", "DEBUG")
-            iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
-            driver.switch_to.frame(iframe)
-            safe_print("已切換到 iframe", "DEBUG")
+        time.sleep(1)
 
-            # 等待 iframe 內容載入
-            time.sleep(2)
+        # 點擊查詢按鈕
+        query_button = driver.find_element(By.XPATH, "//input[@name='Submit' and @value='查詢']")
+        driver.execute_script("arguments[0].click();", query_button)
 
-            # 2. 直接設定日期值（不使用日曆彈出視窗）
-            safe_print("直接設定日期值...", "DEBUG")
+        time.sleep(5)
 
-            # 使用 JavaScript 直接設定並觸發事件
-            try:
-                safe_print(f"使用 JavaScript 設定日期為 {today_str}", "DEBUG")
-
-                # 直接設定值
-                driver.execute_script(f"document.getElementById('FindDate').value = '{today_str}';")
-                driver.execute_script(f"document.getElementById('FindEDate').value = '{today_str}';")
-
-                # 觸發 change 事件以確保表單知道值已更改
-                driver.execute_script(
-                    "document.getElementById('FindDate').dispatchEvent(new Event('change', {bubbles: true}));")
-                driver.execute_script(
-                    "document.getElementById('FindEDate').dispatchEvent(new Event('change', {bubbles: true}));")
-
-                # 等待一下讓變更生效
-                time.sleep(1)
-
-                safe_print("JavaScript 設定完成", "DEBUG")
-
-            except Exception as e:
-                safe_print(f"JavaScript 方法失敗: {e}", "WARNING")
-
-                # 備用方法: 使用 Selenium 直接操作（移除 readonly 屬性）
-                try:
-                    safe_print("嘗試移除 readonly 屬性並直接輸入...", "DEBUG")
-
-                    # 移除 readonly 屬性
-                    driver.execute_script("document.getElementById('FindDate').removeAttribute('readonly');")
-                    driver.execute_script("document.getElementById('FindEDate').removeAttribute('readonly');")
-
-                    # 獲取元素並設定值
-                    start_date_input = driver.find_element(By.ID, 'FindDate')
-                    end_date_input = driver.find_element(By.ID, 'FindEDate')
-
-                    # 清空並輸入新值
-                    start_date_input.clear()
-                    start_date_input.send_keys(today_str)
-
-                    end_date_input.clear()
-                    end_date_input.send_keys(today_str)
-
-                    safe_print("直接輸入方法完成", "DEBUG")
-
-                except Exception as e2:
-                    safe_print(f"直接輸入方法也失敗: {e2}", "ERROR")
-
-            # 3. 驗證日期是否設定成功
-            try:
-                updated_start = driver.find_element(By.ID, 'FindDate').get_attribute('value')
-                updated_end = driver.find_element(By.ID, 'FindEDate').get_attribute('value')
-                safe_print(f"設定後的日期值 - 開始: {updated_start}, 結束: {updated_end}", "DEBUG")
-
-                if updated_start == today_str and updated_end == today_str:
-                    safe_print("日期設定成功！", "DEBUG")
-                else:
-                    safe_print("日期可能未正確設定", "WARNING")
-
-            except Exception as e:
-                safe_print(f"驗證日期時發生錯誤: {e}", "ERROR")
-
-            # 4. 執行改進的查詢流程
-            safe_print("開始執行改進的查詢流程...", "INFO")
-
-            if improved_query_process(driver, wait, today_str):
-                # 5. 獲取 iframe 內的 HTML
-                html_content = driver.page_source
-                safe_print(f"成功獲取 HTML，長度: {len(html_content)} 字元", "DEBUG")
-
-                # 6. 切換回主頁面
-                driver.switch_to.default_content()
-                safe_print("已切換回主頁面", "DEBUG")
-
-                return parse_attendance_html(html_content)
-            else:
-                safe_print("查詢流程失敗", "ERROR")
-                driver.switch_to.default_content()
-                return None
-
-        except Exception as e:
-            safe_print(f"iframe 操作發生錯誤: {e}", "ERROR")
-            # 確保切換回主頁面
-            try:
-                driver.switch_to.default_content()
-            except:
-                pass
-            return None
+        # 直接獲取HTML（不需要切換iframe）
+        html_content = driver.page_source
+        return parse_attendance_html(html_content)
 
     except Exception as e:
         safe_print(f"抓取出勤資料發生錯誤: {e}", "ERROR")
         return None
     finally:
-        if driver:  # 需要縮排
+        if driver:
             try:
                 driver.quit()
-                time.sleep(2)  # 等待完全關閉
+                time.sleep(2)
                 import gc
-                gc.collect()  # 強制垃圾回收
+                gc.collect()
             except:
                 pass
-
+                
 def parse_attendance_html(html_content):
     """解析出勤 HTML 資料（更新版本）"""
     try:
