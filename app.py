@@ -398,9 +398,14 @@ def get_chrome_options():
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
-    options.add_argument('--window-size=1920,1080')
     options.add_argument('--disable-extensions')
     options.add_argument('--disable-plugins')
+    options.add_argument('--single-process')  # 新增：強制單程序模式
+    options.add_argument('--memory-pressure-off')  # 新增：關閉記憶體壓力檢測
+    options.add_argument('--disable-background-timer-throttling')  # 新增：穩定性
+    options.add_argument('--disable-renderer-backgrounding')  # 新增：穩定性
+    options.add_argument('--disable-backgrounding-occluded-windows')  # 新增：穩定性
+    options.add_argument('--window-size=1024,768')  # 改小：減少記憶體使用
     return options
 
 
@@ -735,12 +740,14 @@ def get_futai_attendance():
         safe_print(f"抓取出勤資料發生錯誤: {e}", "ERROR")
         return None
     finally:
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
-
+    if driver:
+        try:
+            driver.quit()
+            time.sleep(2)  # 等待完全關閉
+            import gc
+            gc.collect()  # 強制垃圾回收
+        except:
+            pass
 
 def parse_attendance_html(html_content):
     """解析出勤 HTML 資料（更新版本）"""
