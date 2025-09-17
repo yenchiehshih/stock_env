@@ -741,9 +741,8 @@ def parse_attendance_html(html_content):
         safe_print(f"解析 HTML 時發生錯誤: {e}", "ERROR")
         return None
 
-
 def send_daily_attendance():
-    """發送每日出勤資料給使用者"""
+    """發送每日出勤資料給使用者（老公和老婆都會收到）"""
     safe_print(f"開始執行每日出勤資料查詢...", "INFO")
 
     try:
@@ -753,14 +752,15 @@ def send_daily_attendance():
             user_attendance = attendance_data.get(FUTAI_USERNAME)
 
             if user_attendance:
-                # 取得下班時間並設定動態提醒
+                # 取得下班時間並設定動態提醒（只為老公設定）
                 work_end_str = user_attendance['work_end']  # 格式: "17:30"
                 work_manager.set_work_end_time(work_end_str)
 
-                # 設定今日的下班提醒
+                # 設定今日的下班提醒（只為老公設定）
                 work_manager.setup_work_end_reminders(work_end_str)
 
-                message = f"""📋 今日出勤資料 ({user_attendance['date']})
+                # 給老公的詳細出勤資料訊息
+                husband_message = f"""📋 今日出勤資料 ({user_attendance['date']})
 
 👤 {user_attendance['name']} ({FUTAI_USERNAME})
 🕐 上班：{user_attendance['work_start']}
@@ -770,8 +770,23 @@ def send_daily_attendance():
 ⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}
 
 🔔 已設定下班前提醒：1小時、30分鐘、10分鐘、5分鐘"""
+
+                # 給騷鵝的溫馨出勤資料訊息
+                wife_message = f"""💕 騷鵝寶貝，灰鵝的出勤資料來囉～
+
+📅 日期：{user_attendance['date']}
+🌅 上班時間：{user_attendance['work_start']}
+🌅 預估下班：{user_attendance['work_end']}
+
+💖 你的灰鵝今天也再努力工作，為了我們的未來加油！
+騷鵝在外送的時候要注意安全💕騎車不要太快！
+記得晚上要誇誇在牧場等你外送回家的灰鵝哦～
+
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
             else:
-                message = f"""⚠️ 未找到今日出勤資料
+                # 沒有找到出勤資料的訊息
+                husband_message = f"""⚠️ 未找到今日出勤資料
 
 可能原因：
 • 今天尚未刷卡上班
@@ -779,16 +794,48 @@ def send_daily_attendance():
 • 網路連線問題
 
 ⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
+                wife_message = f"""💕 騷鵝寶貝～
+
+今天還沒查到灰鵝的出勤資料呢，可能是：
+• 灰鵝還沒到公司刷卡
+• 系統還沒更新資料
+• 網路有點問題
+
+不過不用擔心，等等再查查看！
+
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
         else:
-            message = f"""❌ 出勤資料查詢失敗
+            # 查詢失敗的訊息
+            husband_message = f"""❌ 出勤資料查詢失敗
 
 請稍後再試，或手動檢查系統狀態。
 
 ⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
 
+            wife_message = f"""💕 騷鵝寶貝～
+
+灰鵝的出勤查詢出了點小問題，可能是系統在維護中。
+不過別擔心，你的灰鵝會想辦法處理的！
+
+等等會再試試看的～
+
+⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
+
         # 發送給老公
-        line_bot_api.push_message(YOUR_USER_ID, TextSendMessage(text=message))
-        safe_print(f"已發送每日出勤資料", "INFO")
+        try:
+            line_bot_api.push_message(YOUR_USER_ID, TextSendMessage(text=husband_message))
+            safe_print(f"已發送每日出勤資料給老公", "INFO")
+        except Exception as e:
+            safe_print(f"發送出勤資料給老公失敗：{e}", "ERROR")
+
+        # 發送給騷鵝（老婆）
+        try:
+            line_bot_api.push_message(WIFE_USER_ID, TextSendMessage(text=wife_message))
+            safe_print(f"已發送每日出勤資料給騷鵝", "INFO")
+        except Exception as e:
+            safe_print(f"發送出勤資料給騷鵝失敗：{e}", "ERROR")
 
     except Exception as e:
         safe_print(f"發送每日出勤資料失敗：{e}", "ERROR")
@@ -809,7 +856,7 @@ def send_work_end_reminder(time_desc, work_end_time):
 • 確認明天的工作安排
 • 注意回家路上的交通安全
 
-💕 辛苦了！你的灰鵝在家等你～"""
+💕 辛苦了！你的騷鵝在家等你～"""
 
     try:
         line_bot_api.push_message(YOUR_USER_ID, TextSendMessage(text=message))
