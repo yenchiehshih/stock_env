@@ -1284,7 +1284,6 @@ def status():
         "wife_inactive_hours": round(wife_inactive_hours, 1),
         "care_messages_sent_today": len(care_manager.care_messages_sent),
         "features": "節日提醒 + AI對話 + 出勤查詢 + 24小時關懷 + 每日歡迎",
-        "futai_username": FUTAI_USERNAME
     }
 
     return json.dumps(status_info, ensure_ascii=False, indent=2)
