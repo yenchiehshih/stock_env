@@ -1325,7 +1325,6 @@ def send_work_reminder(reminder_type):
 
 
 # ============== Line Bot 事件處理 ==============
-
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     """處理 Line Bot 接收到的訊息"""
@@ -1361,18 +1360,18 @@ def handle_message(event):
         reply_text = f"🕐 台灣時間：{taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}\n星期{['一', '二', '三', '四', '五', '六', '日'][taiwan_time.weekday()]}"
 
     elif any(keyword in user_message for keyword in ['出勤', '查詢出勤', '刷卡', '上班時間', '下班時間']):
-    if user_id == YOUR_USER_ID:
-        # 老公查詢出勤
-        threading.Thread(target=send_daily_attendance_for_husband, daemon=True).start()
-        reply_text = "📋 正在查詢灰鵝今日出勤資料，請稍候...\n系統將在查詢完成後自動發送結果給您"
-        safe_print("📋 老公啟動出勤查詢", "INFO")
-    elif user_id == WIFE_USER_ID:
-        # 騷鵝查詢灰鵝的出勤
-        threading.Thread(target=send_daily_attendance_for_wife, daemon=True).start()
-        reply_text = "💕 騷鵝寶貝想知道灰鵝的工作狀況嗎？\n正在幫你查詢灰鵝今天的出勤資料～請稍等一下下哦！"
-        safe_print("📋 騷鵝啟動灰鵝出勤查詢", "INFO")
-    else:
-        reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
+        if user_id == YOUR_USER_ID:
+            # 老公查詢出勤
+            threading.Thread(target=send_daily_attendance_for_husband, daemon=True).start()
+            reply_text = "📋 正在查詢灰鵝今日出勤資料，請稍候...\n系統將在查詢完成後自動發送結果給您"
+            safe_print("📋 老公啟動出勤查詢", "INFO")
+        elif user_id == WIFE_USER_ID:
+            # 騷鵝查詢灰鵝的出勤
+            threading.Thread(target=send_daily_attendance_for_wife, daemon=True).start()
+            reply_text = "💕 騷鵝寶貝想知道灰鵝的工作狀況嗎？\n正在幫你查詢灰鵝今天的出勤資料～請稍等一下下哦！"
+            safe_print("📋 騷鵝啟動灰鵝出勤查詢", "INFO")
+        else:
+            reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
 
     else:
         # 使用 AI 回應
@@ -1393,7 +1392,6 @@ def handle_message(event):
         safe_print(f"Line API 錯誤：{e}", "ERROR")
     except Exception as e:
         safe_print(f"回覆訊息失敗：{e}", "ERROR")
-
 
 def get_test_message():
     """測試訊息"""
