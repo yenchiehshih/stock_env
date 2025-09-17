@@ -1250,28 +1250,13 @@ def handle_message(event):
         taiwan_time = get_taiwan_now()
         reply_text = f"🕐 台灣時間：{taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}\n星期{['一', '二', '三', '四', '五', '六', '日'][taiwan_time.weekday()]}"
 
-    elif any(keyword in user_message for keyword in ['出勤', '查詢出勤', '上班時間']):
-        if user_id == YOUR_USER_ID:  # 只有老公可以查詢出勤
-            try:
-                attendance_data = get_futai_attendance()
-                if attendance_data and FUTAI_USERNAME in attendance_data:
-                    user_data = attendance_data[FUTAI_USERNAME]
-                    reply_text = f"""📋 出勤查詢結果
-
-👤 {user_data['name']} ({FUTAI_USERNAME})
-📅 {user_data['date']}
-🕐 上班：{user_data['work_start']}
-🕕 預估下班：{user_data['work_end']}
-
-💡 所有刷卡時間：{', '.join(user_data['times'])}
-⏰ 查詢時間：{get_taiwan_now().strftime('%Y-%m-%d %H:%M:%S')}"""
-                else:
-                    reply_text = "查詢失敗，請稍後再試。"
-            except Exception as e:
-                safe_print(f"手動出勤查詢錯誤：{e}", "ERROR")
-                reply_text = "出勤查詢發生錯誤，請稍後再試。"
-        else:
-            reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
+    elif any(keyword in user_message for keyword in ['出勤', '查詢出勤', '刷卡', '上班時間', '下班時間']):
+    if user_id == YOUR_USER_ID:
+        threading.Thread(target=send_daily_attendance, daemon=True).start()
+        reply_text = "📋 正在查詢今日出勤資料，請稍候...\n系統將在查詢完成後自動發送結果給您"
+        safe_print("📋 啟動出勤查詢", "INFO")
+    else:
+        reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
 
     else:
         # 使用 AI 回應
