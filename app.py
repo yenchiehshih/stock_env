@@ -740,14 +740,14 @@ def get_futai_attendance():
         safe_print(f"抓取出勤資料發生錯誤: {e}", "ERROR")
         return None
     finally:
-    if driver:
-        try:
-            driver.quit()
-            time.sleep(2)  # 等待完全關閉
-            import gc
-            gc.collect()  # 強制垃圾回收
-        except:
-            pass
+        if driver:  # 需要縮排
+            try:
+                driver.quit()
+                time.sleep(2)  # 等待完全關閉
+                import gc
+                gc.collect()  # 強制垃圾回收
+            except:
+                pass
 
 def parse_attendance_html(html_content):
     """解析出勤 HTML 資料（更新版本）"""
@@ -1258,12 +1258,12 @@ def handle_message(event):
         reply_text = f"🕐 台灣時間：{taiwan_time.strftime('%Y-%m-%d %H:%M:%S')}\n星期{['一', '二', '三', '四', '五', '六', '日'][taiwan_time.weekday()]}"
 
     elif any(keyword in user_message for keyword in ['出勤', '查詢出勤', '刷卡', '上班時間', '下班時間']):
-    if user_id == YOUR_USER_ID:
-        threading.Thread(target=send_daily_attendance, daemon=True).start()
-        reply_text = "📋 正在查詢今日出勤資料，請稍候...\n系統將在查詢完成後自動發送結果給您"
-        safe_print("📋 啟動出勤查詢", "INFO")
-    else:
-        reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
+        if user_id == YOUR_USER_ID:
+            threading.Thread(target=send_daily_attendance, daemon=True).start()
+            reply_text = "📋 正在查詢今日出勤資料，請稍候...\n系統將在查詢完成後自動發送結果給您"
+            safe_print("📋 啟動出勤查詢", "INFO")
+        else:
+            reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
 
     else:
         # 使用 AI 回應
