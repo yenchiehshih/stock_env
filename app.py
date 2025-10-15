@@ -616,7 +616,7 @@ def get_futai_attendance():
 
         # 登入
         driver.get('https://eportal.futai.com.tw/Home/Login?ReturnUrl=%2F')
-        
+
         id_field = wait.until(EC.presence_of_element_located((By.ID, 'Account')))
         id_field.send_keys(FUTAI_USERNAME)
 
@@ -627,8 +627,9 @@ def get_futai_attendance():
         time.sleep(3)
 
         # 使用測試成功的URL（關鍵修改）
-        driver.get('https://bpmflow.futai.com.tw/futaibpmflow/SignOnFutai.aspx?Account=2993&Token=QxY%2BV82RudxNLWk6ZPWQdiDWxUmcDvnLTJUKvhMIG08%3D&FunctionID=AB-ABS-04')
-        
+        driver.get(
+            'https://bpmflow.futai.com.tw/futaibpmflow/SignOnFutai.aspx?Account=2993&Token=QxY%2BV82RudxNLWk6ZPWQdiDWxUmcDvnLTJUKvhMIG08%3D&FunctionID=AB-ABS-04')
+
         time.sleep(3)
 
         # 獲取今天日期
@@ -663,7 +664,8 @@ def get_futai_attendance():
                 gc.collect()
             except:
                 pass
-                
+
+
 def parse_attendance_html(html_content):
     """解析出勤 HTML 資料（更新版本）"""
     try:
@@ -740,6 +742,8 @@ def parse_attendance_html(html_content):
     except Exception as e:
         safe_print(f"解析 HTML 時發生錯誤: {e}", "ERROR")
         return None
+
+
 def send_daily_attendance_for_husband():
     """發送每日出勤資料給老公（詳細版本，包含下班提醒設定）"""
     safe_print(f"開始執行老公的出勤資料查詢...", "INFO")
@@ -878,10 +882,11 @@ def send_daily_attendance_for_wife():
         except:
             pass
 
+
 def send_daily_attendance():
     """發送每日出勤資料給使用者（自動排程用，同時發給老公和騷鵝）"""
     safe_print(f"開始執行每日自動出勤資料查詢...", "INFO")
-    
+
     # 同時執行兩個查詢
     threading.Thread(target=send_daily_attendance_for_husband, daemon=True).start()
     threading.Thread(target=send_daily_attendance_for_wife, daemon=True).start()
@@ -1370,7 +1375,10 @@ def handle_message(event):
             reply_text = "💕 騷鵝寶貝想知道灰鵝的工作狀況嗎？\n正在幫你查詢灰鵝今天的出勤資料～請稍等一下下哦！"
             safe_print("📋 騷鵝啟動灰鵝出勤查詢", "INFO")
         else:
-            reply_text = "抱歉，出勤查詢功能僅限特定用戶使用。"
+            # 阿婆查詢出勤
+            threading.Thread(target=send_daily_attendance_for_husband, daemon=True).start()
+            reply_text = "📋 正在查詢灰鵝今日出勤資料，請稍候...\n系統將在查詢完成後自動發送結果給您"
+            safe_print("📋 阿婆啟動出勤查詢", "INFO")
 
     else:
         # 使用 AI 回應
@@ -1391,6 +1399,7 @@ def handle_message(event):
         safe_print(f"Line API 錯誤：{e}", "ERROR")
     except Exception as e:
         safe_print(f"回覆訊息失敗：{e}", "ERROR")
+
 
 def get_test_message():
     """測試訊息"""
