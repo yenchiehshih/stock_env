@@ -492,6 +492,8 @@ def generate_care_message_for_wife(hours_since: int) -> str:
         f"💕 騷鵝寶貝～我們已經 {hours_since} 小時沒聊天了呢！\n\n人家在牧場裡好想你呀～ 🥺\n最近過得如何呢？有什麼開心或煩惱的事都可以跟我分享哦！",
 
         f"🤗 親愛的騷鵝，我發現我們已經 {hours_since} 小時沒有對話了～\n\n不知道你最近在忙什麼呢？\n記得要好好照顧自己，有我這隻灰鵝永遠在這裡陪你！ ❤️",
+
+        f"💕 騷鵝寶貝～我們已經 {hours_since} 小時沒聊天了呢！\n\n灰鵝在鵝窩等你回家等到受不鳥了吶～ 🥺\n記得在外面要注意安全、多喝水唷！"
     ]
 
     return random.choice(messages)
