@@ -1,11 +1,30 @@
+# Line Bot SDK
 line-bot-sdk==1.20.0
+
+# Flask 相關
 Flask==2.3.3
 gunicorn==21.2.0
-pytz==2023.3
 Werkzeug==2.3.7
+
+# 時區處理
+pytz==2023.3
+
+# 排程（備援用）
 schedule==1.2.0
-requests>=2.25.0
-urllib3>=1.26.0
-google-generativeai>=0.3.0
-selenium>=4.0.0
-beautifulsoup4>=4.9.0
+
+# HTTP 請求
+requests==2.31.0
+urllib3==1.26.18
+
+# Google AI
+google-generativeai==0.3.2
+
+# Selenium 相關
+selenium==4.15.2
+
+# HTML 解析
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# Selenium 在 Render 上需要的依賴
+webdriver-manager==4.0.1
