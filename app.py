@@ -73,15 +73,48 @@ IMPORTANT_DATES = {
 }
 
 
+# ============== 基礎工具函數（必須最先定義） ==============
+
+def get_taiwan_now():
+    """取得台灣當前時間"""
+    return datetime.datetime.now(TAIWAN_TZ)
+
+
+def get_taiwan_today():
+    """取得台灣今天的日期"""
+    return get_taiwan_now().date()
+
+
+def get_user_name(user_id: str) -> str:
+    """根據 User ID 取得用戶名稱"""
+    for name, uid in USERS.items():
+        if uid == user_id:
+            if name == 'husband':
+                return '老公'
+            elif name == 'wife':
+                return '老婆'
+    return '用戶'
+
+
+def safe_print(message: str, level: str = "INFO"):
+    """統一的日誌輸出函數，包含台灣時間和等級"""
+    try:
+        taiwan_time = get_taiwan_now()
+        formatted_time = taiwan_time.strftime('%Y-%m-%d %H:%M:%S TW')
+        print(f"[{formatted_time}] [{level}] {message}")
+    except Exception as e:
+        print(f"[TIME_ERROR] [{level}] {message} (時間格式化錯誤: {e})")
+
+
 # ============== 🆕 新增：執行鎖定機制 ==============
 
 class ExecutionLock:
     """防止同一任務短時間內重複執行"""
-    
+
     def __init__(self):
         self.locks = {}
         self.last_execution = {}
-    
+
     def acquire(self, task_name: str, cooldown_seconds: int = 300) -> bool:
         """
         嘗試取得執行鎖
@@ -90,17 +123,17 @@ class ExecutionLock:
         返回: True 表示可以執行，False 表示需要等待
         """
         current_time = time.time()
-        
+
         if task_name in self.last_execution:
             elapsed = current_time - self.last_execution[task_name]
             if elapsed < cooldown_seconds:
                 safe_print(f"任務 {task_name} 冷卻中，剩餘 {int(cooldown_seconds - elapsed)} 秒", "DEBUG")
                 return False
-        
+
         self.last_execution[task_name] = current_time
         safe_print(f"任務 {task_name} 取得執行鎖", "DEBUG")
         return True
-    
+
     def reset(self, task_name: str):
         """重置特定任務的鎖"""
         if task_name in self.last_execution:
@@ -116,12 +149,12 @@ execution_lock = ExecutionLock()
 
 class DailyExecutionTracker:
     """記錄每日任務執行狀態，確保某些任務一天只執行一次"""
-    
+
     def __init__(self):
         self.executed_today = {}
         self.current_date = None
         self._update_date()
-    
+
     def _update_date(self):
         """更新當前日期，如果日期改變則清空記錄"""
         today = get_taiwan_today()
@@ -129,18 +162,18 @@ class DailyExecutionTracker:
             self.current_date = today
             self.executed_today = {}
             safe_print(f"日期更新為 {today}，已清空每日執行記錄", "INFO")
-    
+
     def mark_executed(self, task_name: str):
         """標記任務已執行"""
         self._update_date()
         self.executed_today[task_name] = get_taiwan_now()
         safe_print(f"標記任務已執行: {task_name}", "DEBUG")
-    
+
     def is_executed_today(self, task_name: str) -> bool:
         """檢查任務今天是否已執行"""
         self._update_date()
         return task_name in self.executed_today
-    
+
     def get_execution_time(self, task_name: str):
         """取得任務執行時間"""
         self._update_date()
@@ -926,12 +959,12 @@ def send_daily_attendance_for_wife():
 def send_daily_attendance_auto():
     """🆕 自動排程專用的出勤查詢（帶防重複機制）"""
     safe_print(f"[自動排程] 開始執行每日出勤資料查詢...", "INFO")
-    
+
     # 🆕 檢查今天是否已執行過
     if daily_tracker.is_executed_today('daily_attendance'):
         safe_print("[自動排程] 今日已執行過出勤查詢，跳過", "INFO")
         return
-    
+
     # 🆕 檢查是否在工作日
     taiwan_time = get_taiwan_now()
     if taiwan_time.weekday() >= 5:  # 週六、日
@@ -1020,7 +1053,7 @@ def send_daily_attendance_auto():
             safe_print(f"[自動排程] 已發送出勤資料給騷鵝", "INFO")
         except Exception as e:
             safe_print(f"[自動排程] 發送給騷鵝失敗：{e}", "ERROR")
-        
+
         # 🆕 標記今日已執行
         daily_tracker.mark_executed('daily_attendance')
 
@@ -1226,10 +1259,10 @@ def list_all_holidays():
 def keep_alive():
     """🆕 每 10 分鐘自己戳自己一下，避免 Render 休眠（從 25 分鐘縮短）"""
     app_url = os.environ.get('RENDER_EXTERNAL_URL', 'https://stock-env.onrender.com')
-    
+
     if not app_url:
         safe_print("未設定 RENDER_EXTERNAL_URL，使用預設值", "WARNING")
-    
+
     safe_print(f"自我喚醒功能啟動，目標 URL: {app_url}", "INFO")
 
     while True:
@@ -1267,11 +1300,11 @@ def auto_attendance():
             "message": "出勤查詢冷卻中，請稍後再試",
             "time": taiwan_time.strftime('%Y-%m-%d %H:%M:%S')
         }), 200
-    
+
     try:
         # 在背景執行，避免阻塞 HTTP 回應
         threading.Thread(target=send_daily_attendance_auto, daemon=True).start()
-        
+
         taiwan_time = get_taiwan_now()
         return jsonify({
             "status": "triggered",
@@ -1290,7 +1323,7 @@ def auto_attendance():
 def auto_work_reminder():
     """🆕 自動排程專用：下班提醒檢查（每 5 分鐘觸發）"""
     taiwan_time = get_taiwan_now()
-    
+
     # 只在工作日的 14:00-19:00 執行
     if taiwan_time.weekday() >= 5:
         return jsonify({
@@ -1299,7 +1332,7 @@ def auto_work_reminder():
             "message": "今天是週末，跳過下班提醒",
             "time": taiwan_time.strftime('%Y-%m-%d %H:%M:%S')
         }), 200
-    
+
     if not (14 <= taiwan_time.hour < 19):
         return jsonify({
             "status": "skipped",
@@ -1307,7 +1340,7 @@ def auto_work_reminder():
             "message": "不在檢查時間範圍內（14:00-19:00）",
             "time": taiwan_time.strftime('%Y-%m-%d %H:%M:%S')
         }), 200
-    
+
     try:
         work_manager.check_work_end_reminders()
         return jsonify({
@@ -1336,7 +1369,7 @@ def auto_holiday_check():
             "message": "節日檢查冷卻中",
             "time": taiwan_time.strftime('%Y-%m-%d %H:%M:%S')
         }), 200
-    
+
     try:
         check_all_holidays()
         taiwan_time = get_taiwan_now()
@@ -1506,7 +1539,7 @@ def daily_cleanup():
         welcome_manager.clear_old_records()
         care_manager.clear_old_records()
         work_manager.clear_work_end_records()
-        
+
         # 🆕 重置每日執行追蹤器（會在 _update_date 時自動清空）
         daily_tracker._update_date()
 
@@ -1663,14 +1696,14 @@ def get_fallback_response(user_name):
 def setup_schedules():
     """🆕 簡化版排程任務（作為備援，主要依賴外部觸發）"""
     safe_print("設定備援排程任務...", "INFO")
-    
+
     # 🆕 降低頻率，只作為備援
     schedule.every().day.at("09:00").do(check_all_holidays)
     schedule.every().day.at("18:00").do(check_all_holidays)
-    
+
     # 每日清理
     schedule.every().day.at("01:00").do(daily_cleanup)
-    
+
     safe_print("✅ 備援排程任務設定完成（主要依賴外部觸發）", "INFO")
 
 
