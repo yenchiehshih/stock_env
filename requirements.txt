@@ -24,7 +24,7 @@ selenium==4.15.2
 
 # HTML 解析
 beautifulsoup4==4.12.2
-lxml==4.9.3
+lxml==5.3.0
 
 # Selenium 在 Render 上需要的依賴
 webdriver-manager==4.0.1
